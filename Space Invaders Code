@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Space Invaders</title>
+<style>
+  body {
+    background: #111;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    font-family: monospace;
+  }
+  canvas {
+    background: #000;
+    border: 2px solid #33ff33;
+    box-shadow: 0 0 15px rgba(51, 255, 51, 0.3);
+  }
+  p { margin-top: 10px; color: #aaa; }
+</style>
+</head>
+<body>
+
+<canvas id="game" width="600" height="500"></canvas>
+<p>Move: Left/Right Arrows | Shoot: Spacebar | Restart: R</p>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let score = 0;
+let gameOver = false;
+let win = false;
+
+const player = { x: 280, y: 450, w: 40, h: 20, speed: 5 };
+let bullets = [];
+let enemyBullets = [];
+let enemies = [];
+let enemyDir = 1;
+let enemySpeed = 1;
+
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space' && !gameOver) shoot();
+  if (e.code === 'KeyR' && gameOver) resetGame();
+});
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+function initEnemies() {
+  enemies = [];
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 8; col++) {
+      enemies.push({
+        x: 60 + col * 60,
+        y: 50 + row * 40,
+        w: 32,
+        h: 22,
+        alive: true
+      });
+    }
+  }
+}
+
+function shoot() {
+  if (bullets.length < 3) {
+    bullets.push({ x: player.x + player.w / 2 - 2, y: player.y, w: 4, h: 12 });
+  }
+}
+
+function resetGame() {
+  score = 0;
+  gameOver = false;
+  win = false;
+  player.x = 280;
+  bullets = [];
+  enemyBullets = [];
+  enemyDir = 1;
+  enemySpeed = 1;
+  initEnemies();
+}
+
+function update() {
+  if (gameOver) return;
+
+  // Player movement
+  if (keys['ArrowLeft'] && player.x > 10) player.x -= player.speed;
+  if (keys['ArrowRight'] && player.x < canvas.width - player.w - 10) player.x += player.speed;
+
+  // Player bullets
+  bullets.forEach(b => b.y -= 7);
+  bullets = bullets.filter(b => b.y > 0);
+
+  // Enemy movement
+  let hitEdge = false;
+  const aliveEnemies = enemies.filter(e => e.alive);
+  aliveEnemies.forEach(e => {
+    e.x += enemySpeed * enemyDir;
+    if (e.x + e.w >= canvas.width - 10 || e.x <= 10) hitEdge = true;
+  });
+
+  if (hitEdge) {
+    enemyDir *= -1;
+    aliveEnemies.forEach(e => e.y += 18);
+    enemySpeed += 0.15;
+  }
+
+  // Random enemy shooting
+  if (Math.random() < 0.02 && aliveEnemies.length > 0) {
+    const shooter = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
+    enemyBullets.push({ x: shooter.x + shooter.w / 2, y: shooter.y + shooter.h, w: 4, h: 12 });
+  }
+
+  enemyBullets.forEach(b => b.y += 4);
+  enemyBullets = enemyBullets.filter(b => b.y < canvas.height);
+
+  // Bullet vs Enemy collisions
+  bullets.forEach((b, bi) => {
+    aliveEnemies.forEach(e => {
+      if (b.x < e.x + e.w && b.x + b.w > e.x && b.y < e.y + e.h && b.y + b.h > e.y) {
+        e.alive = false;
+        bullets.splice(bi, 1);
+        score += 100;
+      }
+    });
+  });
+
+  // Enemy bullet or Enemy vs Player collisions
+  enemyBullets.forEach(b => {
+    if (b.x < player.x + player.w && b.x + b.w > player.x && b.y < player.y + player.h && b.y + b.h > player.y) {
+      gameOver = true;
+    }
+  });
+
+  aliveEnemies.forEach(e => {
+    if (e.y + e.h >= player.y) gameOver = true;
+  });
+
+  if (aliveEnemies.length === 0) {
+    gameOver = true;
+    win = true;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Score
+  ctx.fillStyle = '#fff';
+  ctx.font = '18px monospace';
+  ctx.fillText(`SCORE: ${score}`, 15, 28);
+
+  // Player ship
+  ctx.fillStyle = '#33ff33';
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.fillRect(player.x + 15, player.y - 8, 10, 8);
+
+  // Enemies
+  ctx.fillStyle = '#ff3366';
+  enemies.forEach(e => {
+    if (e.alive) ctx.fillRect(e.x, e.y, e.w, e.h);
+  });
+
+  // Bullets
+  ctx.fillStyle = '#ffff33';
+  bullets.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
+
+  ctx.fillStyle = '#ff6600';
+  enemyBullets.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
+
+  // Game Over / Win screen
+  if (gameOver) {
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = win ? '#33ff33' : '#ff3366';
+    ctx.font = '36px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(win ? 'YOU WIN!' : 'GAME OVER', canvas.width / 2, 230);
+    ctx.fillStyle = '#fff';
+    ctx.font = '18px monospace';
+    ctx.fillText('Press R to Play Again', canvas.width / 2, 270);
+    ctx.textAlign = 'left';
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+initEnemies();
+loop();
+</script>
+</body>
+</html>
